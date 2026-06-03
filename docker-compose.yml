@@ -1,0 +1,165 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# Shared environment injected into every backend-family service.
+# Values can be overridden in .env
+# ─────────────────────────────────────────────────────────────
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-aiops}@postgres:5432/${POSTGRES_DB:-aiops}
+  REDIS_URL: redis://redis:6379/0
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DEBUG: ${DEBUG:-false}
+  SECRET_KEY: ${SECRET_KEY:-change-me}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  DEMO_PERIODIC_ALERTS: ${DEMO_PERIODIC_ALERTS:-false}
+  DEMO_ALERT_INTERVAL_SECONDS: ${DEMO_ALERT_INTERVAL_SECONDS:-120}
+  AUTO_ANALYZE_NEW_INCIDENTS: ${AUTO_ANALYZE_NEW_INCIDENTS:-false}
+  CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
+
+x-backend-base: &backend-base
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  env_file: .env
+  environment:
+    <<: *backend-env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  volumes:
+    - ./backend:/app
+  restart: unless-stopped
+
+services:
+  # ──────────────────────────────────────────────────────────
+  # Infrastructure
+  # ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aiops}
+      POSTGRES_USER: ${POSTGRES_USER:-aiops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aiops}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aiops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────────────────────
+  # Backend API
+  # ──────────────────────────────────────────────────────────
+  backend:
+    <<: *backend-base
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ──────────────────────────────────────────────────────────
+  # Celery Worker
+  # Consumes all three queues: alerts, analysis, default
+  # ──────────────────────────────────────────────────────────
+  celery_worker:
+    <<: *backend-base
+    command: >
+      celery -A app.workers.celery_app worker
+        --loglevel=info
+        --concurrency=${CELERY_CONCURRENCY:-4}
+        --queues=alerts,analysis,default
+        --hostname=worker@%h
+        --without-gossip
+        --without-mingle
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  # ──────────────────────────────────────────────────────────
+  # Celery Beat (periodic task scheduler)
+  # One instance only — never scale this service
+  # ──────────────────────────────────────────────────────────
+  celery_beat:
+    <<: *backend-base
+    command: >
+      celery -A app.workers.celery_app beat
+        --loglevel=info
+        --scheduler celery.beat:PersistentScheduler
+        --pidfile=/tmp/celerybeat.pid
+        --schedule=/tmp/celerybeat-schedule
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  # ──────────────────────────────────────────────────────────
+  # Flower — Celery task monitoring UI
+  # http://localhost:5555
+  # ──────────────────────────────────────────────────────────
+  flower:
+    <<: *backend-base
+    command: >
+      celery -A app.workers.celery_app flower
+        --port=5555
+        --url_prefix=
+        --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+
+  # ──────────────────────────────────────────────────────────
+  # Frontend
+  # ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:

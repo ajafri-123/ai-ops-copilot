@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a15;
+  --foreground: #e2e8f0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* React Flow overrides — transparent background, dark handles */
+.react-flow__renderer {
+  background: transparent !important;
+}
+.react-flow__background {
+  background: transparent !important;
+}
+.react-flow__controls-button {
+  background: transparent !important;
+}
+
+/* Remove focus ring on React Flow canvas */
+.react-flow__pane:focus {
+  outline: none;
+}
+
+/* Smooth scroll for timeline */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar (Webkit) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
