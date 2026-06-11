@@ -13,9 +13,5 @@ export default function IntegrationsLayout({ children }: { children: React.React
     }
   }, [router]);
 
-  if (typeof window !== "undefined" && !isAuthenticated()) {
-    return null;
-  }
-
   return <>{children}</>;
 }

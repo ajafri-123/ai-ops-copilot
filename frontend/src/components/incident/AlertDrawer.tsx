@@ -149,13 +149,13 @@ export function AlertDrawer({ alertId, onClose }: Props) {
       {/* Drawer */}
       <div
         className={clsx(
-          "fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col bg-[#0d0d1e] shadow-2xl",
-          "border-l border-white/[0.08] transition-transform duration-300 ease-out",
+          "fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col bg-[#06101f] shadow-2xl",
+          "border-l border-cyan-500/[0.1] transition-transform duration-300 ease-out",
           isOpen ? "translate-x-0" : "translate-x-full",
         )}
       >
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.08] px-6 py-4">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-cyan-500/[0.1] px-6 py-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-orange-400" />
             <h2 className="text-sm font-semibold text-white">Alert Details</h2>
@@ -296,7 +296,7 @@ export function AlertDrawer({ alertId, onClose }: Props) {
                       Raw Payload
                     </h4>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#080812] px-4 py-3 font-mono text-[11px] leading-5">
+                  <div className="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#020913] px-4 py-3 font-mono text-[11px] leading-5">
                     <JsonTree data={alert.raw_payload} />
                   </div>
                 </div>

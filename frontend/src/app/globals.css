@@ -3,48 +3,119 @@
 @tailwind utilities;
 
 :root {
-  --background: #0a0a15;
+  --background: #020913;
+  --surface: #06101f;
+  --surface-2: #081320;
   --foreground: #e2e8f0;
+  --accent: #22d3ee;
+  --accent-glow: rgba(34, 211, 238, 0.15);
+  --border-subtle: rgba(34, 211, 238, 0.08);
+  --border-medium: rgba(34, 211, 238, 0.16);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
+  background-image: radial-gradient(circle, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-/* React Flow overrides — transparent background, dark handles */
-.react-flow__renderer {
-  background: transparent !important;
-}
-.react-flow__background {
-  background: transparent !important;
-}
-.react-flow__controls-button {
-  background: transparent !important;
-}
-
-/* Remove focus ring on React Flow canvas */
-.react-flow__pane:focus {
-  outline: none;
-}
-
-/* Smooth scroll for timeline */
-* {
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar (Webkit) */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(34, 211, 238, 0.15);
   border-radius: 999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.3); }
+
+/* ── Text selection ── */
+::selection {
+  background: rgba(34, 211, 238, 0.2);
+  color: #e2e8f0;
 }
+
+/* ── Smooth scroll ── */
+* { scroll-behavior: smooth; }
+
+/* ── React Flow overrides ── */
+.react-flow__renderer { background: transparent !important; }
+.react-flow__background { background: transparent !important; }
+.react-flow__controls-button { background: transparent !important; }
+.react-flow__pane:focus { outline: none; }
+
+/* ── Glow utilities ── */
+@layer utilities {
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15), 0 0 40px rgba(34, 211, 238, 0.05);
+  }
+  .glow-red {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2), 0 0 40px rgba(239, 68, 68, 0.05);
+  }
+  .glow-orange {
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.15);
+  }
+  .glow-green {
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.15);
+  }
+  .border-cyber {
+    border-color: var(--border-subtle);
+  }
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-2 { background-color: var(--surface-2); }
+}
+
+/* ── Scanline top bar for nav ── */
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.nav-scan-line {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #22d3ee, #06b6d4, #22d3ee, transparent);
+  animation: scan-pulse 3s ease-in-out infinite;
+}
+
+/* ── Animated gradient hero mesh ── */
+@keyframes mesh-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(2%, 1%) scale(1.02); }
+  66% { transform: translate(-1%, 2%) scale(0.98); }
+}
+.hero-mesh { animation: mesh-drift 12s ease-in-out infinite; }
+
+/* ── Blink cursor ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink { animation: blink 1s step-end infinite; }
+
+/* ── Slide up entrance ── */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
+
+/* ── Toast entrance ── */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-in { animation: slide-in-right 0.2s ease-out, fade-in 0.15s ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Pulse ring for live status ── */
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.animate-ping-slow { animation: ping-slow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }

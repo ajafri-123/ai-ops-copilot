@@ -252,7 +252,7 @@ function AITimeline({ entries }: { entries: TimelineEntry[] }) {
         <div key={i} className="relative flex gap-3 pb-3 pl-6">
           <span
             className={clsx(
-              "absolute left-[3px] top-1.5 h-3 w-3 rounded-full border-2 border-[#0a0a15]",
+              "absolute left-[3px] top-1.5 h-3 w-3 rounded-full border-2 border-[#020913]",
               SIGNIFICANCE_DOT[entry.significance] ?? "bg-slate-500",
             )}
           />

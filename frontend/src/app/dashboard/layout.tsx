@@ -13,10 +13,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [router]);
 
-  if (typeof window !== "undefined" && !isAuthenticated()) {
-    return null;
-  }
-
   return <>{children}</>;
 }
 

@@ -124,6 +124,7 @@ function StatusPill({ status }: { status: Integration["status"] }) {
 }
 
 function relativeTime(iso: string): string {
+  if (typeof window === "undefined") return "";
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60_000);
   if (mins < 1) return "just now";
@@ -157,7 +158,7 @@ function ToastList({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
             "pointer-events-auto flex max-w-sm cursor-pointer flex-col gap-0.5 rounded-xl border px-4 py-3 text-sm shadow-xl transition",
             t.type === "success" && "border-emerald-500/25 bg-[#0d1a14] text-emerald-300",
             t.type === "error" && "border-red-500/25 bg-[#1a0d0d] text-red-300",
-            t.type === "info" && "border-indigo-500/25 bg-[#0d0d1e] text-indigo-300",
+            t.type === "info" && "border-indigo-500/25 bg-[#06101f] text-indigo-300",
           )}
         >
           <span className="font-medium">{t.message}</span>
@@ -291,7 +292,7 @@ function IntegrationCard({
             <button
               onClick={handleTest}
               disabled={testing}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600/80 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/25 disabled:opacity-50"
             >
               {testing ? (
                 <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -334,10 +335,14 @@ function IntegrationCard({
 
 export default function IntegrationsPage() {
   const router = useRouter();
-  const user = getStoredUser();
+  const [user, setUser] = useState<ReturnType<typeof getStoredUser>>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
 
   function addToast(toast: Omit<Toast, "id">) {
     const id = ++_toastId;
@@ -408,9 +413,9 @@ export default function IntegrationsPage() {
   const connected = integrations.filter((i) => i.status === "connected").length;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0a0a15]">
+    <div className="flex min-h-screen flex-col bg-[#020913]">
       {/* Nav */}
-      <nav className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.07] bg-[#0d0d1e] px-6 py-3">
+      <nav className="flex flex-shrink-0 items-center justify-between border-b border-cyan-500/[0.08] bg-[#06101f] px-6 py-3">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/20">
@@ -455,7 +460,7 @@ export default function IntegrationsPage() {
               the correlation engine.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-2 rounded-lg border border-cyan-500/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm">
             <span className="text-slate-500">Active</span>
             <span className="font-semibold text-white">{connected}</span>
             <span className="text-slate-600">/</span>
@@ -476,7 +481,7 @@ export default function IntegrationsPage() {
           <ChevronRight className="h-3 w-3 text-slate-600" />
           <span>Watch the correlation engine create or update an incident</span>
           <ChevronRight className="h-3 w-3 text-slate-600" />
-          <Link href="/dashboard" className="text-indigo-400 hover:text-indigo-300">
+          <Link href="/dashboard" className="text-cyan-400 hover:text-cyan-300">
             See it live on the dashboard →
           </Link>
         </div>

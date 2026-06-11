@@ -395,7 +395,10 @@ class CorrelationEngine:
             )
 
         await db.commit()
-        await db.refresh(incident)
+
+        # Reload with eagerly-loaded events to avoid MissingGreenlet on Pydantic validation
+        from app.crud.incident import get_incident as _get_incident
+        incident = await _get_incident(db, incident.id)  # type: ignore[assignment]
 
         # ── Broadcast WS events ───────────────────────────
         from app.core.ws_manager import ws_manager  # lazy import – avoids circular
@@ -472,7 +475,10 @@ class CorrelationEngine:
         )
 
         await db.commit()
-        await db.refresh(incident)
+
+        # Reload with eagerly-loaded events to avoid MissingGreenlet on Pydantic validation
+        from app.crud.incident import get_incident as _get_incident
+        incident = await _get_incident(db, incident.id)  # type: ignore[assignment]
 
         # ── Broadcast WS events ───────────────────────────
         from app.core.ws_manager import ws_manager  # lazy import

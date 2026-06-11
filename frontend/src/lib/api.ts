@@ -1,7 +1,13 @@
 import type { Alert, AnalyzeResponse, Incident, Integration, ServiceGraphResponse, TestAlertResponse } from "./types";
 import { getAuthHeaders } from "./auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Server-side (SSR/RSC) uses INTERNAL_API_URL so Docker containers can
+// reach the backend via its service name rather than localhost.
+// Client-side always uses the public URL (already resolved in the browser).
+const API_BASE =
+  typeof window === "undefined"
+    ? (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
+    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
 export const WS_URL =
   (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000") + "/api/v1/ws";
 

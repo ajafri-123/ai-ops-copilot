@@ -106,8 +106,8 @@ export function IncidentMeta({ incident }: Props) {
   ];
 
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] overflow-hidden">
-      <div className="border-b border-white/[0.07] px-4 py-3">
+    <div className="rounded-xl border border-cyan-500/[0.1] bg-[#081320] overflow-hidden">
+      <div className="border-b border-cyan-500/[0.07] px-4 py-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
           Incident Details
         </h3>
@@ -129,7 +129,7 @@ export function IncidentMeta({ incident }: Props) {
 
       {/* Affected services */}
       {incident.affected_services && incident.affected_services.length > 0 && (
-        <div className="border-t border-white/[0.07] p-4">
+        <div className="border-t border-cyan-500/[0.07] p-4">
           <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
             Affected Services
           </p>
@@ -137,7 +137,7 @@ export function IncidentMeta({ incident }: Props) {
             {incident.affected_services.map((svc) => (
               <span
                 key={svc}
-                className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs font-mono text-slate-300"
+                className="flex items-center gap-1.5 rounded-md border border-cyan-500/[0.1] bg-cyan-500/[0.04] px-2.5 py-1 text-xs font-mono text-slate-300"
               >
                 <span
                   className={clsx(

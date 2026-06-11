@@ -2,7 +2,7 @@
 Pydantic schemas for Alert – used for request validation and response serialisation.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +21,7 @@ class AlertBase(BaseModel):
     description: str | None = None
     service_name: str = Field(..., max_length=128)
     environment: str = Field(default="production", max_length=64)
-    timestamp: datetime
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     raw_payload: dict[str, Any] | None = None
     status: AlertStatus = AlertStatus.open
 

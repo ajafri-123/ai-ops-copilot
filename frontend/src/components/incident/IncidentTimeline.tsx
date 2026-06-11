@@ -154,7 +154,7 @@ export function IncidentTimeline({ events, onAlertClick }: Props) {
               className={clsx(
                 "rounded-md px-3 py-1 text-xs font-medium transition",
                 filter === opt.id
-                  ? "bg-white/10 text-white"
+                  ? "bg-cyan-500/15 text-cyan-300"
                   : "text-slate-500 hover:text-slate-300",
               )}
             >
@@ -170,7 +170,7 @@ export function IncidentTimeline({ events, onAlertClick }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search events…"
-            className="w-full rounded-lg border border-white/[0.07] bg-white/[0.04] pl-8 pr-3 py-1.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
+            className="w-full rounded-lg border border-cyan-500/[0.08] bg-[#020913] pl-8 pr-3 py-1.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
           />
         </div>
 
@@ -209,7 +209,7 @@ export function IncidentTimeline({ events, onAlertClick }: Props) {
                         {/* Dot */}
                         <span
                           className={clsx(
-                            "absolute left-[9px] top-3.5 h-[13px] w-[13px] rounded-full border-2 border-[#0a0a15]",
+                            "absolute left-[9px] top-3.5 h-[13px] w-[13px] rounded-full border-2 border-[#020913]",
                             meta.dotColor,
                           )}
                         />

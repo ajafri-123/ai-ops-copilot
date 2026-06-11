@@ -85,9 +85,9 @@ export function IncidentDetail({ incident, onClose }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0d0d1e]">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-cyan-500/[0.12] bg-[#06101f] shadow-glow-cyan">
       {/* ── Header ── */}
-      <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+      <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-cyan-500/[0.08] px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-slate-500">#{incident.id}</span>
@@ -116,7 +116,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
               "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
               analyzing
                 ? "cursor-not-allowed bg-indigo-500/20 text-indigo-400"
-                : "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 hover:text-indigo-200",
+                : "bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:text-cyan-200",
             )}
           >
             {analyzing ? (
@@ -142,7 +142,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
       </div>
 
       {/* ── Tab bar ── */}
-      <div className="flex flex-shrink-0 items-center gap-0.5 border-b border-white/10 px-5 pt-2">
+      <div className="flex flex-shrink-0 items-center gap-0.5 border-b border-cyan-500/[0.08] px-5 pt-2">
         {(
           [
             { id: "overview", label: "Overview" },
@@ -161,7 +161,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
             className={clsx(
               "relative flex items-center gap-1.5 px-3 pb-2 pt-1 text-xs font-medium transition",
               activeTab === tab.id
-                ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-indigo-500"
+                ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-cyan-500"
                 : "text-slate-500 hover:text-slate-300",
             )}
           >
@@ -172,7 +172,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
               </span>
             )}
             {"dot" in tab && tab.dot && hasAiData && (
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
             )}
           </button>
         ))}
@@ -219,10 +219,10 @@ export function IncidentDetail({ incident, onClose }: Props) {
             {!hasAiData && !analyzing && (
               <button
                 onClick={runAnalysis}
-                className="w-full rounded-xl border border-dashed border-indigo-500/30 bg-indigo-500/5 px-4 py-5 text-center transition hover:border-indigo-500/50 hover:bg-indigo-500/10"
+                className="w-full rounded-xl border border-dashed border-cyan-500/20 bg-cyan-500/[0.04] px-4 py-5 text-center transition hover:border-cyan-500/30 hover:bg-cyan-500/[0.07]"
               >
                 <BrainCircuit className="mx-auto mb-2 h-6 w-6 text-indigo-400" />
-                <p className="text-sm font-medium text-indigo-300">
+                <p className="text-sm font-medium text-cyan-300">
                   Run AI root-cause analysis
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -253,7 +253,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
                   No AI analysis yet. Click{" "}
                   <button
                     onClick={runAnalysis}
-                    className="text-indigo-400 hover:underline"
+                    className="text-cyan-400 hover:underline"
                   >
                     Analyze
                   </button>{" "}
@@ -354,7 +354,7 @@ export function IncidentDetail({ incident, onClose }: Props) {
 
 function AnalyzingState() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-8 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04] px-4 py-8 text-center">
       <div className="relative">
         <BrainCircuit className="h-8 w-8 text-indigo-400" />
         <span className="absolute -right-1 -top-1 flex h-3 w-3">
@@ -363,7 +363,7 @@ function AnalyzingState() {
         </span>
       </div>
       <div>
-        <p className="text-sm font-medium text-indigo-300">AI is analyzing…</p>
+        <p className="text-sm font-medium text-cyan-300">AI is analyzing…</p>
         <p className="mt-0.5 text-xs text-slate-500">
           Correlating alerts, building timeline, identifying root cause
         </p>
@@ -440,7 +440,7 @@ function AITimeline({ entries }: { entries: TimelineEntry[] }) {
         <div key={i} className="relative flex gap-3 pb-3 pl-5">
           <span
             className={clsx(
-              "absolute left-[3px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d0d1e]",
+              "absolute left-[3px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#06101f]",
               SIGNIFICANCE_DOT[entry.significance] ?? "bg-slate-500",
             )}
           />

@@ -48,7 +48,7 @@ function ServiceNode({ data }: { data: { label: string; affected: boolean; group
         "relative flex min-w-[120px] items-center justify-center rounded-xl border px-4 py-3 text-center text-xs font-semibold shadow-lg transition-all",
         data.affected
           ? "border-red-500/60 bg-red-500/10 text-red-300 shadow-red-500/10 ring-1 ring-red-500/30"
-          : "border-white/10 bg-[#151526] text-slate-400",
+          : "border-white/10 bg-[#081320] text-slate-400",
       )}
     >
       {data.affected && (
@@ -148,7 +148,7 @@ function computeLayout(
     target: e.target,
     label: EDGE_LABEL[e.relationship] ?? e.relationship,
     labelStyle: { fill: "#64748b", fontSize: 10 },
-    labelBgStyle: { fill: "#0d0d1e", fillOpacity: 0.8 },
+    labelBgStyle: { fill: "#06101f", fillOpacity: 0.8 },
     style: { stroke: EDGE_COLOR[e.relationship] ?? "#6366f1", strokeWidth: 1.5 },
     markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLOR[e.relationship] ?? "#6366f1", width: 12, height: 12 },
     animated: e.relationship === "depends_on",
@@ -169,8 +169,14 @@ function GraphInner({ graph }: Props) {
     [graph],
   );
 
-  const [nodes, , onNodesChange] = useNodesState(layoutNodes);
-  const [edges, , onEdgesChange] = useEdgesState(layoutEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
+
+  // Sync React Flow state when the upstream graph data changes
+  useEffect(() => {
+    setNodes(layoutNodes);
+    setEdges(layoutEdges);
+  }, [layoutNodes, layoutEdges, setNodes, setEdges]);
 
   // Legend data
   const usedRelationships = [...new Set(graph.edges.map((e) => e.relationship))];
@@ -198,7 +204,7 @@ function GraphInner({ graph }: Props) {
           color="#ffffff08"
         />
         <Controls
-          className="!border-white/10 !bg-[#0d0d1e] !shadow-none [&>button]:!border-white/10 [&>button]:!bg-white/[0.04] [&>button]:!text-slate-400 [&>button:hover]:!bg-white/[0.08]"
+          className="!border-white/10 !bg-[#06101f] !shadow-none [&>button]:!border-white/10 [&>button]:!bg-white/[0.04] [&>button]:!text-slate-400 [&>button:hover]:!bg-white/[0.08]"
           showInteractive={false}
         />
       </ReactFlow>
@@ -209,7 +215,7 @@ function GraphInner({ graph }: Props) {
           {usedRelationships.map((rel) => (
             <span
               key={rel}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#0d0d1e]/90 px-2 py-1 text-[10px] backdrop-blur"
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#06101f]/90 px-2 py-1 text-[10px] backdrop-blur"
             >
               <span
                 className="h-2 w-3 rounded-sm"
