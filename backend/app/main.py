@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
-from app.core.database import create_tables
+from app.core.database import create_tables, engine
 from app.core.ratelimit import limiter
 from app.core.redis import close_redis
 from app.core.seed import seed_database
@@ -16,6 +17,10 @@ from app.core.ws_manager import ws_manager
 
 logging.basicConfig(level=settings.LOG_LEVEL.upper())
 logger = logging.getLogger(__name__)
+
+# Fixed advisory-lock key so concurrent uvicorn workers serialize startup
+# schema/seed work — only one worker migrates+seeds, the rest no-op.
+_STARTUP_LOCK_KEY = 715002
 
 
 def _run_migrations() -> None:
@@ -31,22 +36,38 @@ def _run_migrations() -> None:
     command.upgrade(cfg, "head")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # ── Startup ──────────────────────────────────────────────
-    # SQLite (tests/local) can't run the Postgres-oriented migrations, so it
-    # falls back to create_all. Real databases go through Alembic so the schema
-    # has a versioned upgrade path instead of silent create_all drift.
+async def _init_schema_and_seed() -> None:
+    """
+    Migrate + seed exactly once, even under `uvicorn --workers N`.
+
+    A Postgres session-level advisory lock (held on a dedicated connection
+    across both the Alembic run and the seed) serializes all workers: the first
+    does the work, the rest find the schema already at head and the seed guard
+    skips. SQLite (tests/local, single process) just creates tables directly.
+    """
     if settings.DATABASE_URL.startswith("sqlite"):
         logger.info("SQLite detected — creating tables directly …")
         await create_tables()
-    else:
-        logger.info("Running database migrations (alembic upgrade head) …")
-        _run_migrations()
-    logger.info("Schema ready.")
+        await seed_database()
+        return
 
-    logger.info("Running database seed …")
-    await seed_database()
+    async with engine.connect() as lock_conn:
+        await lock_conn.exec_driver_sql(f"SELECT pg_advisory_lock({_STARTUP_LOCK_KEY})")
+        try:
+            logger.info("Running database migrations (alembic upgrade head) …")
+            await asyncio.to_thread(_run_migrations)
+            logger.info("Schema ready. Running database seed …")
+            await seed_database()
+        finally:
+            await lock_conn.exec_driver_sql(
+                f"SELECT pg_advisory_unlock({_STARTUP_LOCK_KEY})"
+            )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────
+    await _init_schema_and_seed()
 
     # Relay WS events published to Redis (by Celery workers or other API
     # replicas) to this process's connected clients.
