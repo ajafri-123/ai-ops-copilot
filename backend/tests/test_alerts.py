@@ -23,10 +23,12 @@ async def test_create_alert(client: AsyncClient):
     response = await client.post("/api/v1/alerts", json=SAMPLE_ALERT)
     assert response.status_code == 201
     data = response.json()
-    assert data["id"] is not None
-    assert data["source"] == "aws"
-    assert data["severity"] == "critical"
-    assert data["service_name"] == "orders-db"
+    # Sync ingestion returns the alert nested alongside correlation results
+    assert data["alert"]["id"] is not None
+    assert data["alert"]["source"] == "aws"
+    assert data["alert"]["severity"] == "critical"
+    assert data["alert"]["service_name"] == "orders-db"
+    assert data["incident_id"] is not None
 
 
 @pytest.mark.asyncio
@@ -47,7 +49,7 @@ async def test_get_alerts_list(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_get_alert_by_id(client: AsyncClient):
     create_resp = await client.post("/api/v1/alerts", json=SAMPLE_ALERT)
-    alert_id = create_resp.json()["id"]
+    alert_id = create_resp.json()["alert"]["id"]
 
     response = await client.get(f"/api/v1/alerts/{alert_id}")
     assert response.status_code == 200

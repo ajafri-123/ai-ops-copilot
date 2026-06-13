@@ -84,7 +84,7 @@ async def patch_incident(
             db,
             incident_id=incident_id,
             event_type=EventType.status_changed,
-            message=f"Status changed from {old_status} → {payload.status}",
+            message=f"Status changed from {old_status.value} → {payload.status.value}",
         )
 
     if payload.root_cause:
@@ -98,12 +98,19 @@ async def patch_incident(
 
     if payload.severity and payload.severity != old_severity:
         changed_fields.append("severity")
+        await add_event(
+            db,
+            incident_id=incident_id,
+            event_type=EventType.escalated,
+            message=f"Severity changed from {old_severity.value} → {payload.severity.value}",
+        )
 
     refreshed = await get_incident(db, incident_id)
     result = IncidentRead.model_validate(refreshed)
 
     if changed_fields:
         await ws_manager.emit_incident_updated(
+            org_id=ctx.org_id,
             incident=result.model_dump(),
             changed_fields=changed_fields,
         )

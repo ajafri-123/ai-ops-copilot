@@ -16,15 +16,17 @@ const SCENARIOS = [
 export function DemoLauncher() {
   const [loading,    setLoading]    = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{ scenario: string; alerts: number; incidents: number } | null>(null);
+  const [error,      setError]      = useState<string | null>(null);
 
   const run = async (scenarioId: string) => {
     setLoading(scenarioId);
     setLastResult(null);
+    setError(null);
     try {
       const result = await triggerDemoScenario(scenarioId);
       setLastResult({ scenario: scenarioId, alerts: result.alerts_created, incidents: result.incidents_touched.length });
     } catch (e) {
-      console.error(e);
+      setError(e instanceof Error ? e.message : "Demo scenario failed");
     } finally {
       setLoading(null);
     }
@@ -45,6 +47,11 @@ export function DemoLauncher() {
           </span>
         )}
       </div>
+      {error && (
+        <p className="mb-2 rounded-md border border-red-500/25 bg-red-500/[0.08] px-2.5 py-1.5 text-[11px] text-red-400" role="alert">
+          {error}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-1.5">
         {SCENARIOS.map((s) => (
           <button

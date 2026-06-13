@@ -217,7 +217,10 @@ function IntegrationCard({
     }
   }
 
-  const samplePayload = integration.config?.sample_payload;
+  const samplePayload = (integration.config?.sample_payload ?? null) as Record<
+    string,
+    unknown
+  > | null;
 
   return (
     <div

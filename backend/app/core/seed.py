@@ -627,14 +627,14 @@ async def seed_database() -> None:
             db.add(Alert(**a, organization_id=org.id))
         await db.flush()
 
-        # ── Service dependencies ─────────────────────────────
+        # ── Service dependencies (scoped to the demo org) ────
         for dep in SERVICE_DEPENDENCY_FIXTURES:
-            db.add(ServiceDependency(**dep))
+            db.add(ServiceDependency(**dep, organization_id=org.id))
 
         # ── Incidents + events ───────────────────────────────
         for inc_data in INCIDENT_FIXTURES:
             events_data = inc_data.pop("events", [])
-            incident = Incident(**inc_data, organization_id=org.id)
+            incident = Incident(**inc_data, organization_id=org.id, environment="production")
             db.add(incident)
             await db.flush()
 

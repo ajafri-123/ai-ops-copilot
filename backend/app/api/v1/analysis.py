@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import AuthContext, get_auth
+from app.core.ratelimit import ANALYZE_LIMIT, limiter
+from app.crud.incident import get_incident
 from app.schemas.analysis import AnalyzeResponse
 from app.services.analysis_pipeline import run_analysis_pipeline
+from app.workers.tasks import analyze_incident_bg
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,9 @@ router = APIRouter(tags=["AI Analysis"])
     },
     summary="Run AI root-cause analysis (sync or async)",
 )
+@limiter.limit(ANALYZE_LIMIT)
 async def analyze_incident(
+    request: Request,
     incident_id: int,
     background: bool = Query(
         default=False,
@@ -48,11 +53,19 @@ async def analyze_incident(
     - **`?async=true`**: enqueues a Celery task and returns HTTP 202 immediately.
       Results are pushed to the dashboard via WebSocket when the task finishes.
     """
-    if background:
-        from app.workers.tasks import analyze_incident_bg
+    # Ownership check — analysis reads and WRITES the incident, so a missing
+    # check here is a cross-tenant read+write (and an OpenAI spend vector).
+    incident = await get_incident(db, incident_id)
+    if not incident or incident.organization_id != ctx.org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident {incident_id} not found",
+        )
 
+    if background:
         task = analyze_incident_bg.apply_async(
             args=[incident_id],
+            kwargs={"org_id": ctx.org_id},
             queue="analysis",
         )
         logger.info(
@@ -69,6 +82,6 @@ async def analyze_incident(
 
     # ── Synchronous path ──────────────────────────────────────
     try:
-        return await run_analysis_pipeline(incident_id, db)
+        return await run_analysis_pipeline(incident_id, db, org_id=ctx.org_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

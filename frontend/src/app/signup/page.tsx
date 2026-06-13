@@ -144,7 +144,7 @@ export default function SignupPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className={labelClass} htmlFor="password">Password</label>
-                <input id="password" type="password" autoComplete="new-password" required minLength={6} value={form.password} onChange={update("password")} placeholder="Min. 6 characters" className={inputClass} />
+                <input id="password" type="password" autoComplete="new-password" required minLength={8} value={form.password} onChange={update("password")} placeholder="Min. 8 characters" className={inputClass} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className={labelClass} htmlFor="confirmPassword">Confirm password</label>

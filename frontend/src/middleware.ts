@@ -5,7 +5,12 @@ const AUTH_PAGES = ["/login", "/signup"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isAuth = request.cookies.has("aiops_auth");
+
+  // Treat the session as valid only if the token-expiry cookie is present and
+  // still in the future — not a cosmetic "logged in" flag.
+  const expCookie = request.cookies.get("aiops_exp")?.value;
+  const exp = expCookie ? Number(expCookie) : NaN;
+  const isAuth = Number.isFinite(exp) && exp > Math.floor(Date.now() / 1000);
 
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));

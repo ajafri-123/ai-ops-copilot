@@ -11,18 +11,20 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import AuthContext, get_auth
+from app.core.ratelimit import ALERT_INGEST_LIMIT, DEMO_GENERATE_LIMIT, limiter
 from app.core.ws_manager import ws_manager
 from app.crud.alert import create_alert, get_alert, list_alerts
 from app.models.alert import AlertStatus
 from app.schemas.alert import AlertCreate, AlertListResponse, AlertRead
 from app.services.correlation_engine import correlation_engine
 from app.services.demo_generator import AVAILABLE_SCENARIOS, build_alerts_for_scenario
+from app.workers.tasks import process_alert
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,9 @@ class DemoGenerateResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="Fire a realistic multi-alert scenario",
 )
+@limiter.limit(DEMO_GENERATE_LIMIT)
 async def demo_generate(
+    request: Request,
     scenario: str = Body(
         default="database_overload",
         embed=True,
@@ -116,7 +120,9 @@ async def demo_generate(
     status_code=status.HTTP_201_CREATED,
     summary="Ingest a new alert",
 )
+@limiter.limit(ALERT_INGEST_LIMIT)
 async def ingest_alert(
+    request: Request,
     payload: AlertCreate,
     run_async: bool = Query(default=False, alias="async"),
     db: AsyncSession = Depends(get_db),
@@ -125,15 +131,13 @@ async def ingest_alert(
     alert = await create_alert(db, payload, org_id=ctx.org_id)
     alert_read = AlertRead.model_validate(alert)
 
-    await ws_manager.emit_alert_created(alert_read.model_dump())
+    await ws_manager.emit_alert_created(ctx.org_id, alert_read.model_dump())
     logger.info(
         "[ingest_alert] alert_id=%d org_id=%d mode=%s",
         alert.id, ctx.org_id, "async" if run_async else "sync",
     )
 
     if run_async:
-        from app.workers.tasks import process_alert
-
         task = process_alert.apply_async(args=[alert.id], queue="alerts")
         return AlertIngestAsyncResponse(
             alert=alert_read,

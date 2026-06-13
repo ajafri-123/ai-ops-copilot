@@ -110,7 +110,7 @@ async def test_alert(
     alert = await create_alert(db, AlertCreate(**alert_data), org_id=ctx.org_id)
 
     alert_read = AlertRead.model_validate(alert)
-    await ws_manager.emit_alert_created(alert_read.model_dump())
+    await ws_manager.emit_alert_created(ctx.org_id, alert_read.model_dump())
 
     result = await correlation_engine.correlate(db, alert)
 

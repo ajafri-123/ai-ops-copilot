@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt
+import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -25,4 +25,5 @@ def create_access_token(data: dict) -> str:
 
 
 def decode_token(token: str) -> dict:
+    """Decode and verify a JWT. Raises jwt.InvalidTokenError on any failure."""
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

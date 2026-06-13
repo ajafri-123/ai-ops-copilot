@@ -1,12 +1,15 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+# Postgres JSONB with a SQLite fallback so the test suite can create the schema
+JSONBType = JSONB().with_variant(JSON(), "sqlite")
 
 
 class IntegrationProvider(str, enum.Enum):
@@ -53,7 +56,7 @@ class Integration(Base):
     )
 
     # Stores mock config: webhook_url, api_key_hint, region, etc.
-    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    config: Mapped[dict | None] = mapped_column(JSONBType, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

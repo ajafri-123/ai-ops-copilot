@@ -82,8 +82,10 @@ def process_alert(self: Task, alert_id: int) -> dict:
             )
 
             # Broadcast alert.created so dashboard reflects it immediately
+            # (delivered to API processes via the Redis pub/sub relay)
             await ws_manager.emit_alert_created(
-                AlertRead.model_validate(alert).model_dump()
+                alert.organization_id,
+                AlertRead.model_validate(alert).model_dump(),
             )
 
             # Run correlation engine
@@ -95,10 +97,15 @@ def process_alert(self: Task, alert_id: int) -> dict:
             )
 
             incident_id = result.incident.id
+            incident_org_id = result.incident.organization_id
 
         # Optionally trigger AI analysis in the analysis queue
         if settings.AUTO_ANALYZE_NEW_INCIDENTS and result.created_new:
-            analyze_incident_bg.apply_async(args=[incident_id], queue="analysis")
+            analyze_incident_bg.apply_async(
+                args=[incident_id],
+                kwargs={"org_id": incident_org_id},
+                queue="analysis",
+            )
             logger.info(
                 "[process_alert] queued AI analysis for new incident_id=%d", incident_id
             )
@@ -182,13 +189,14 @@ def correlate_alert(self: Task, alert_id: int) -> dict:
     soft_time_limit=90,         # graceful cancel after 90 s
     time_limit=120,             # hard kill after 120 s
 )
-def analyze_incident_bg(self: Task, incident_id: int) -> dict:
+def analyze_incident_bg(self: Task, incident_id: int, org_id: int | None = None) -> dict:
     """
     Run AI root-cause analysis for an incident in the background.
     Results are persisted to the DB and broadcast via WebSocket.
 
     Args:
         incident_id: PK of the Incident row to analyse.
+        org_id: organization the caller belongs to (ownership re-check).
     """
     logger.info("[analyze_incident_bg] incident_id=%d task=%s", incident_id, self.request.id)
 
@@ -197,7 +205,7 @@ def analyze_incident_bg(self: Task, incident_id: int) -> dict:
         from app.services.analysis_pipeline import run_analysis_pipeline
 
         async with AsyncSessionLocal() as db:
-            response = await run_analysis_pipeline(incident_id, db)
+            response = await run_analysis_pipeline(incident_id, db, org_id=org_id)
             return {
                 "status": "ok",
                 "incident_id": incident_id,
@@ -312,7 +320,7 @@ def generate_demo_alerts() -> dict:
 # Lightweight liveness probe.  Just logs and returns uptime info.
 # ─────────────────────────────────────────────────────────────────────────────
 
-@celery_app.task(name="tasks.worker_heartbeat")
+@celery_app.task(name="tasks.worker_heartbeat", ignore_result=True)
 def worker_heartbeat() -> dict:
     """Periodic heartbeat — confirms the worker and Beat are alive."""
     now = datetime.now(tz=timezone.utc).isoformat()

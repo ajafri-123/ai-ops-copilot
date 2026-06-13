@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WS_URL } from "@/lib/api";
-import { getToken } from "@/lib/auth";
+import { WS_URL, fetchAlerts, fetchIncidents } from "@/lib/api";
+import { clearAuth, getToken } from "@/lib/auth";
 import type {
   Alert,
   AlertCorrelatedData,
@@ -19,6 +19,8 @@ export interface UseWebSocketReturn {
   status: ConnectionStatus;
   alerts: Alert[];
   incidents: Incident[];
+  /** True until the initial REST load settles — distinguishes "loading" from "genuinely empty". */
+  loading: boolean;
   lastEvent: WsEnvelope | null;
   toasts: Toast[];
   dismissToast: (id: number) => void;
@@ -34,16 +36,27 @@ export interface Toast {
 
 let toastId = 0;
 
+/** Server closes with 4401 when the token is missing/invalid/expired. */
+const WS_CLOSE_UNAUTHORIZED = 4401;
+
+/** Union two lists by id, keeping `primary` entries (and their order) first. */
+function mergeById<T extends { id: number }>(primary: T[], secondary: T[]): T[] {
+  const seen = new Set(primary.map((x) => x.id));
+  return [...primary, ...secondary.filter((x) => !seen.has(x.id))];
+}
+
 export function useWebSocket(): UseWebSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
   const [lastEvent, setLastEvent] = useState<WsEnvelope | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelay = useRef(1000);
+  const isUnmounted = useRef(false);
 
   const pushToast = useCallback((event: string, message: string, severity?: string) => {
     const id = ++toastId;
@@ -62,11 +75,15 @@ export function useWebSocket(): UseWebSocketReturn {
   }, []);
 
   const connect = useCallback(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isUnmounted.current) return;
 
     const token = getToken();
-    const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
-    const ws = new WebSocket(url);
+    if (!token) {
+      // The server rejects unauthenticated connections; don't bother trying.
+      setStatus("disconnected");
+      return;
+    }
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
     wsRef.current = ws;
     setStatus("connecting");
 
@@ -86,9 +103,11 @@ export function useWebSocket(): UseWebSocketReturn {
 
       switch (envelope.event) {
         case "snapshot": {
+          // Merge rather than replace: the REST load may already hold
+          // history (e.g. resolved incidents) beyond this snapshot.
           const data = envelope.data as SnapshotData;
-          setAlerts(data.alerts ?? []);
-          setIncidents(data.incidents ?? []);
+          setAlerts((prev) => mergeById(data.alerts ?? [], prev).slice(0, 100));
+          setIncidents((prev) => mergeById(data.incidents ?? [], prev));
           break;
         }
 
@@ -159,9 +178,19 @@ export function useWebSocket(): UseWebSocketReturn {
       setStatus("error");
     };
 
-    ws.onclose = () => {
-      setStatus("disconnected");
+    ws.onclose = (event) => {
       wsRef.current = null;
+      // Don't schedule reconnects after unmount — that leaked background
+      // reconnect loops onto pages that never used this hook.
+      if (isUnmounted.current) return;
+
+      if (event.code === WS_CLOSE_UNAUTHORIZED) {
+        clearAuth();
+        window.location.href = "/login?expired=1";
+        return;
+      }
+
+      setStatus("disconnected");
       // Exponential back-off reconnect (max 30 s)
       const delay = Math.min(reconnectDelay.current, 30000);
       reconnectDelay.current = delay * 2;
@@ -169,13 +198,47 @@ export function useWebSocket(): UseWebSocketReturn {
     };
   }, [pushToast]);
 
+  // Initial data via REST: includes resolved incidents and history the tiny
+  // WS snapshot can't carry, and keeps the dashboard usable if WS is blocked.
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [alertRes, incidentRes] = await Promise.all([
+          fetchAlerts({ limit: 100 }),
+          fetchIncidents({ limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setAlerts((prev) => mergeById(prev, alertRes.items).slice(0, 100));
+        setIncidents((prev) => mergeById(prev, incidentRes.items));
+      } catch {
+        // WS snapshot remains the fallback data source
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    isUnmounted.current = false;
     connect();
     return () => {
-      reconnectTimer.current && clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      isUnmounted.current = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      const ws = wsRef.current;
+      if (ws) {
+        // Detach handlers so onclose can't schedule work after unmount
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.close();
+        wsRef.current = null;
+      }
     };
   }, [connect]);
 
-  return { status, alerts, incidents, lastEvent, toasts, dismissToast };
+  return { status, alerts, incidents, loading, lastEvent, toasts, dismissToast };
 }

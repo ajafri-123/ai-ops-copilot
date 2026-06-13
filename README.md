@@ -1,6 +1,6 @@
 # AI Operations Copilot
 
-> A production-grade, multi-tenant AI incident-response platform that ingests alerts, correlates them into incidents, and uses GPT-4o-mini to generate root-cause analysis and remediation playbooks — all delivered in real time.
+> A multi-tenant AI incident-response platform (portfolio project) that ingests alerts, correlates them into incidents, and uses GPT-4o-mini to generate root-cause analysis and remediation playbooks — all delivered in real time. The included Docker setup is development-grade; see the deployment notes before exposing it anywhere public.
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green?logo=fastapi)](https://fastapi.tiangolo.com)
@@ -32,7 +32,7 @@
 
 Engineering teams lose hours every incident because alerts arrive in isolation, context is scattered, and on-call engineers must manually piece together root cause under pressure. **AI Operations Copilot** solves this by:
 
-- **Ingesting alerts** from any source via a REST API or native integrations (PagerDuty, Datadog, Prometheus).
+- **Ingesting alerts** from any source via a REST API, plus simulated integrations (AWS CloudWatch, Datadog, Sentry, GitHub Actions, Kubernetes, Slack).
 - **Auto-correlating** related alerts into a single incident using a rule-based correlation engine.
 - **Generating AI analysis** — root-cause hypothesis, blast radius, and a step-by-step remediation playbook — powered by OpenAI GPT-4o-mini (with a deterministic mock fallback when no API key is configured).
 - **Streaming updates in real time** to all connected dashboards via WebSocket.
@@ -61,7 +61,7 @@ Engineering teams lose hours every incident because alerts arrive in isolation, 
 | **Multi-Tenancy** | Every DB row is scoped to an `organization_id`; JWT carries org context; FK constraints enforce isolation |
 | **Async Task Queue** | Celery workers handle heavy analysis tasks; Celery Beat runs periodic demo-alert generation |
 | **Flower Monitoring** | Built-in Celery task dashboard at `localhost:5555` |
-| **80+ Tests** | pytest (async) for backend; Jest + React Testing Library for frontend |
+| **Automated tests** | pytest (async) for backend; Jest + React Testing Library for frontend — run in CI on every push |
 | **Zero-Key Demo** | No OpenAI API key needed — mock analyzer produces realistic, deterministic output |
 
 ---
@@ -575,19 +575,19 @@ Tests use an in-memory SQLite database — no running Docker services needed.
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest app/tests/ -v
+pytest -v
 ```
 
 Run a specific test file:
 
 ```bash
-pytest app/tests/test_correlation_engine.py -v
+pytest tests/test_correlation_engine.py -v
 ```
 
 Run with coverage:
 
 ```bash
-pytest app/tests/ --cov=app --cov-report=term-missing
+pytest --cov=app --cov-report=term-missing
 ```
 
 ### Frontend

@@ -5,7 +5,7 @@ Used by the AI layer to infer blast radius when a service degrades.
 
 import enum
 
-from sqlalchemy import String, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -24,10 +24,19 @@ class ServiceDependency(Base):
     __tablename__ = "service_dependencies"
 
     __table_args__ = (
-        UniqueConstraint("service_name", "depends_on", "relationship_type", name="uq_service_dep"),
+        UniqueConstraint(
+            "organization_id", "service_name", "depends_on", "relationship_type",
+            name="uq_service_dep",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    # Tenant scope — service topology is sensitive infrastructure metadata and
+    # must never leak (or influence correlation) across organizations.
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     service_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     depends_on: Mapped[str] = mapped_column(String(128), nullable=False, index=True)

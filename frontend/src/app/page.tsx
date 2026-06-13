@@ -7,11 +7,15 @@ async function getBackendHealth() {
   try { return await fetchHealth(); } catch { return null; }
 }
 
+// Resolve the API docs URL from env so the link isn't hardcoded to localhost.
+const API_DOCS_URL =
+  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000") + "/docs";
+
 const features = [
   {
     icon: AlertTriangle,
     title: "Alert Ingestion",
-    description: "Ingest alerts from PagerDuty, Datadog, Prometheus, and custom webhooks via a single REST endpoint.",
+    description: "Ingest alerts from CloudWatch, Datadog, Sentry, Kubernetes, and custom webhooks via a single REST endpoint.",
     color: "text-red-400",
     bg: "bg-red-500/10",
     border: "border-red-500/20",
@@ -124,7 +128,7 @@ export default async function HomePage() {
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                 </Link>
                 <a
-                  href="http://localhost:8000/docs"
+                  href={API_DOCS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-6 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
@@ -136,9 +140,9 @@ export default async function HomePage() {
               {/* Stats strip */}
               <div className="mt-12 flex flex-wrap gap-8">
                 {[
-                  { value: "< 30s", label: "Mean time to AI analysis" },
-                  { value: "80+",   label: "Automated tests" },
-                  { value: "5",     label: "Native integrations" },
+                  { value: "Real-time", label: "WebSocket incident feed" },
+                  { value: "6",         label: "Simulated integrations" },
+                  { value: "AI",        label: "Root-cause analysis" },
                 ].map((s) => (
                   <div key={s.label}>
                     <p className="text-2xl font-bold tabular-nums text-white">{s.value}</p>

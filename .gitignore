@@ -13,6 +13,10 @@ __pycache__/
 node_modules/
 .next/
 out/
+*.tsbuildinfo
+
+# SQLite (local/test databases)
+*.db
 
 # Docker volumes
 postgres_data/

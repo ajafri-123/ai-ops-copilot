@@ -331,7 +331,7 @@ async def test_analyze_ws_broadcast_fires(
     """WebSocket broadcast should be called after a successful analysis."""
     inc_id = await _seed_incident(db_session, "WS broadcast test")
     with patch(
-        "app.api.v1.analysis.ws_manager.emit_incident_updated",
+        "app.services.analysis_pipeline.ws_manager.emit_incident_updated",
         new_callable=AsyncMock,
     ) as mock_broadcast:
         response = await client.post(f"/api/v1/incidents/{inc_id}/analyze")

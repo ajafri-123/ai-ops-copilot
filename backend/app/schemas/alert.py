@@ -2,12 +2,18 @@
 Pydantic schemas for Alert – used for request validation and response serialisation.
 """
 
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.alert import AlertSeverity, AlertStatus
+
+# Ingestion guards
+MAX_RAW_PAYLOAD_BYTES = 32_768
+MAX_TIMESTAMP_FUTURE = timedelta(minutes=5)
+MAX_TIMESTAMP_AGE = timedelta(days=90)
 
 
 # ─────────────────────────────────────────────
@@ -31,8 +37,34 @@ class AlertBase(BaseModel):
 # ─────────────────────────────────────────────
 
 class AlertCreate(AlertBase):
-    """Payload accepted by POST /alerts."""
-    pass
+    """Payload accepted by POST /alerts (validation on ingestion only)."""
+
+    @field_validator("timestamp")
+    @classmethod
+    def _timestamp_in_sane_window(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        now = datetime.now(tz=timezone.utc)
+        if v > now + MAX_TIMESTAMP_FUTURE:
+            raise ValueError("timestamp must not be in the future")
+        if v < now - MAX_TIMESTAMP_AGE:
+            raise ValueError(f"timestamp must be within the last {MAX_TIMESTAMP_AGE.days} days")
+        return v
+
+    @field_validator("raw_payload")
+    @classmethod
+    def _raw_payload_size_cap(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is not None and len(json.dumps(v, default=str)) > MAX_RAW_PAYLOAD_BYTES:
+            raise ValueError(f"raw_payload must be under {MAX_RAW_PAYLOAD_BYTES} bytes")
+        return v
+
+    @field_validator("source", "service_name", "environment")
+    @classmethod
+    def _strip_identifiers(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be blank")
+        return v
 
 
 class AlertUpdate(BaseModel):

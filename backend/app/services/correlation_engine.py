@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -176,13 +176,19 @@ async def _fetch_active_incidents(
     since: datetime,
     org_id: int | None = None,
 ) -> list[Incident]:
-    """Return all active incidents that have at least one event within the window."""
+    """Return active incidents in the window, scoped to org and environment."""
     query = (
         select(Incident)
         .options(selectinload(Incident.events))
         .where(
             Incident.status.in_(list(ACTIVE_STATUSES)),
             Incident.created_at >= since,
+            # Hard environment guard (rule 4): never correlate across
+            # environments. NULL = legacy rows from before env tracking.
+            or_(
+                Incident.environment == environment,
+                Incident.environment.is_(None),
+            ),
         )
     )
     if org_id is not None:
@@ -193,18 +199,25 @@ async def _fetch_active_incidents(
 
 
 async def _fetch_related_services(
-    db: AsyncSession, service_name: str
+    db: AsyncSession, service_name: str, org_id: int | None = None
 ) -> set[str]:
     """
     Return all services directly connected to `service_name` in either direction
-    of the dependency graph.
+    of the dependency graph, scoped to the alert's organization.
     """
+    # `== None` never matches in SQL — org-less (legacy/system) rows need IS NULL
+    org_cond = (
+        ServiceDependency.organization_id.is_(None)
+        if org_id is None
+        else ServiceDependency.organization_id == org_id
+    )
     result = await db.execute(
         select(ServiceDependency).where(
+            org_cond,
             or_(
                 ServiceDependency.service_name == service_name,
                 ServiceDependency.depends_on == service_name,
-            )
+            ),
         )
     )
     deps = result.scalars().all()
@@ -236,9 +249,12 @@ def _score_candidate(
         signals.append(f"same service '{alert.service_name}'")
 
     # ── Rule 2: Related services (dependency graph) ───────
+    # 15 pts/service so that one dependency hit plus the in-window recency
+    # bonus clears MATCH_THRESHOLD (10/service maxed out at 19.99 — the
+    # dependency rule could never fire on its own).
     related_overlap = incident_services & related_services
     if related_overlap:
-        bonus = min(30.0, len(related_overlap) * 10.0)
+        bonus = min(30.0, len(related_overlap) * 15.0)
         score += bonus
         signals.append(
             f"related services via dependency graph: {', '.join(sorted(related_overlap))}"
@@ -253,15 +269,16 @@ def _score_candidate(
         score += keyword_bonus
         signals.append(f"keyword overlap {kw_score:.0%}")
 
-    # ── Rule 4: Environment guard (hard filter) ───────────
-    # We don't track environment on Incident directly; we skip if
-    # *none* of the alerts attached to the incident share the environment.
-    # As a lightweight proxy we just require score > 0 before this check.
-    # (Full implementation would join alert → incident_events.alert_id.)
+    # Rule 4 (environment guard) is enforced as a hard SQL filter in
+    # _fetch_active_incidents — cross-environment candidates never reach here.
 
     # ── Recency bonus: recently-updated incidents are preferred ──
+    # SQLite (tests) returns naive datetimes even for timezone=True columns
+    created_at = incident.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
     age_hours = (
-        datetime.now(tz=timezone.utc) - incident.created_at
+        datetime.now(tz=timezone.utc) - created_at
     ).total_seconds() / 3600
     recency_bonus = max(0.0, 10.0 - age_hours)
     score += recency_bonus
@@ -293,11 +310,23 @@ class CorrelationEngine:
         """
         since = datetime.now(tz=timezone.utc) - timedelta(minutes=window_minutes)
 
+        # 0. Serialize correlation per org: the read-then-write below would
+        #    otherwise create N duplicate incidents when a burst of related
+        #    alerts is processed concurrently (e.g. parallel Celery workers).
+        #    pg_advisory_xact_lock is held until the next commit/rollback.
+        if db.get_bind().dialect.name == "postgresql":
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(:ns, :key)"),
+                {"ns": 715001, "key": alert.organization_id or 0},
+            )
+
         # 1. Gather candidates (scoped to the alert's org when present)
         active_incidents = await _fetch_active_incidents(
             db, alert.environment, since, org_id=alert.organization_id
         )
-        related_services = await _fetch_related_services(db, alert.service_name)
+        related_services = await _fetch_related_services(
+            db, alert.service_name, org_id=alert.organization_id
+        )
 
         # 2. Score each candidate
         candidates: list[_Candidate] = []
@@ -406,6 +435,7 @@ class CorrelationEngine:
 
         inc_dict = IncidentRead.model_validate(incident).model_dump()
         await ws_manager.emit_alert_correlated(
+            org_id=incident.organization_id,
             alert={"id": alert.id, "title": alert.title, "source": alert.source,
                    "severity": alert.severity.value, "service_name": alert.service_name},
             incident_id=incident.id,
@@ -415,6 +445,7 @@ class CorrelationEngine:
         )
         if escalated:
             await ws_manager.emit_incident_escalated(
+                org_id=incident.organization_id,
                 incident_id=incident.id,
                 old_severity=old_severity.value,
                 new_severity=incident.severity.value,
@@ -422,6 +453,7 @@ class CorrelationEngine:
             )
         else:
             await ws_manager.emit_incident_updated(
+                org_id=incident.organization_id,
                 incident=inc_dict,
                 changed_fields=["affected_services", "summary"],
             )
@@ -449,6 +481,7 @@ class CorrelationEngine:
             title=f"[{alert.source.upper()}] {alert.title}",
             severity=severity,
             status=IncidentStatus.open,
+            environment=alert.environment,
             affected_services=[alert.service_name],
             organization_id=alert.organization_id,
             summary=(
@@ -485,8 +518,9 @@ class CorrelationEngine:
         from app.schemas.incident import IncidentRead
 
         inc_dict = IncidentRead.model_validate(incident).model_dump()
-        await ws_manager.emit_incident_created(inc_dict)
+        await ws_manager.emit_incident_created(incident.organization_id, inc_dict)
         await ws_manager.emit_alert_correlated(
+            org_id=incident.organization_id,
             alert={"id": alert.id, "title": alert.title, "source": alert.source,
                    "severity": alert.severity.value, "service_name": alert.service_name},
             incident_id=incident.id,

@@ -20,7 +20,7 @@ type AlertFilter    = "all" | "open" | "critical";
 type IncidentFilter = "all" | "active" | "resolved";
 
 export default function DashboardPage() {
-  const { status, alerts, incidents, toasts, dismissToast } = useWebSocket();
+  const { status, alerts, incidents, loading, toasts, dismissToast } = useWebSocket();
   const router = useRouter();
   const [user, setUser] = useState<ReturnType<typeof getStoredUser>>(null);
 
@@ -115,7 +115,7 @@ export default function DashboardPage() {
 
         {/* Left sidebar */}
         <div className="flex w-72 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-cyan-500/[0.07] bg-[#06101f] p-4 xl:w-80">
-          <StatsBar alerts={alerts} incidents={incidents} loading={alerts.length === 0 && incidents.length === 0} />
+          <StatsBar alerts={alerts} incidents={incidents} loading={loading} />
           <DemoLauncher />
 
           {/* Incidents panel */}
@@ -195,7 +195,7 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <AlertFeed alerts={filteredAlerts} loading={alerts.length === 0 && status === "connecting"} />
+          <AlertFeed alerts={filteredAlerts} loading={loading} />
         </div>
 
         {/* Right — incident detail */}

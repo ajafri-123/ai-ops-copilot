@@ -314,7 +314,7 @@ _MOCK_PATTERNS: list[tuple[str, dict]] = [
             "remediation": [
                 "Identify failed message schema: aws sqs receive-message --queue-url <dlq-url> --max-number-of-messages 1",
                 "Deploy consumer hotfix to handle the new payload schema.",
-                "After deploy, replay DLQ: aws lambda invoke --function-name dlq-redrive --payload '{}'",
+                "After deploy, replay DLQ: aws lambda invoke --function-name dlq-redrive --payload '{{}}'",
                 "Scale consumers: kubectl scale deployment/{primary_service} --replicas=6 -n production",
                 "Monitor queue depth until it reaches zero: watch -n10 'aws sqs get-queue-attributes --queue-url <url>'",
                 "Add DLQ depth alert at threshold 10 to catch this earlier next time.",

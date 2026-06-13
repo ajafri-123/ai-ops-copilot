@@ -129,15 +129,6 @@ function AlertRow({ alert }: { alert: Alert }) {
           </p>
         )}
       </div>
-
-      {/* Incident correlation indicator */}
-      {alert.incident_id && (
-        <div className="flex-shrink-0 self-center">
-          <span className="rounded-md border border-cyan-500/15 bg-cyan-500/[0.06] px-1.5 py-0.5 font-mono text-[9px] text-cyan-500">
-            INC-{String(alert.incident_id).padStart(4, "0")}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

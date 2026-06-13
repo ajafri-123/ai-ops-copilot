@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 async def run_analysis_pipeline(
     incident_id: int,
     db: AsyncSession,
+    org_id: int | None = None,
 ) -> AnalyzeResponse:
     """
     1. Fetch incident + correlated alerts from the database.
@@ -41,11 +42,14 @@ async def run_analysis_pipeline(
     6. Broadcast incident.updated over WebSocket.
     7. Return a typed AnalyzeResponse.
 
-    Raises ValueError if the incident does not exist.
+    Raises ValueError if the incident does not exist or does not belong to
+    `org_id` (when provided — defense in depth on top of the API-layer check).
     """
     # ── 1. Fetch incident ─────────────────────────────────────
     incident = await get_incident(db, incident_id)
     if not incident:
+        raise ValueError(f"Incident {incident_id} not found")
+    if org_id is not None and incident.organization_id != org_id:
         raise ValueError(f"Incident {incident_id} not found")
 
     # ── 2. Collect alerts referenced by incident events ───────
@@ -133,6 +137,7 @@ async def run_analysis_pipeline(
     refreshed = await get_incident(db, incident_id)
     inc_dict = IncidentRead.model_validate(refreshed).model_dump()
     await ws_manager.emit_incident_updated(
+        org_id=refreshed.organization_id,
         incident=inc_dict,
         changed_fields=["summary", "root_cause", "remediation_steps"],
     )

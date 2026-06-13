@@ -10,23 +10,34 @@ Tests that specifically exercise the auth endpoints (test_auth.py) use the
 `unauthed_client` fixture instead, which only overrides the DB dependency.
 """
 
-import asyncio
 from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.deps import AuthContext, get_auth
+from app.core.ratelimit import limiter
 from app.main import app
 
+# Per-IP rate limits would 429 the suite (every test shares one client IP)
+limiter.enabled = False
+
 # ── Test DB ───────────────────────────────────────────────────────────────────
+# StaticPool keeps a single shared connection so the in-memory database
+# persists across sessions instead of evaporating per-checkout.
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    echo=False,
+    poolclass=StaticPool,
+    connect_args={"check_same_thread": False},
+)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 # Fixed identity used by the authenticated test client
@@ -34,21 +45,16 @@ TEST_ORG_ID: int = 1
 TEST_USER_ID: int = 1
 TEST_EMAIL: str = "test@example.com"
 
-
-# ── Event loop ────────────────────────────────────────────────────────────────
-
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+# Event-loop note: the old hand-rolled session-scoped `event_loop` fixture is
+# gone — pytest-asyncio ≥ 0.25 handles loop scoping via the
+# `asyncio_default_*_loop_scope` settings in pytest.ini.
 
 
 # ── Schema setup ─────────────────────────────────────────────────────────────
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def create_test_tables():
-    """Create all tables once per test session."""
+    """Create a fresh schema for every test so tests stay isolated."""
     import app.models  # noqa: F401 – registers models with metadata
 
     async with test_engine.begin() as conn:

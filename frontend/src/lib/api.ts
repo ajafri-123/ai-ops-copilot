@@ -1,5 +1,5 @@
 import type { Alert, AnalyzeResponse, Incident, Integration, ServiceGraphResponse, TestAlertResponse } from "./types";
-import { getAuthHeaders } from "./auth";
+import { clearAuth, getAuthHeaders } from "./auth";
 
 // Server-side (SSR/RSC) uses INTERNAL_API_URL so Docker containers can
 // reach the backend via its service name rather than localhost.
@@ -10,6 +10,55 @@ const API_BASE =
     : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
 export const WS_URL =
   (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000") + "/api/v1/ws";
+
+// ─────────────────────────────────────────────
+// Shared fetch helpers
+// ─────────────────────────────────────────────
+
+/**
+ * Turn a FastAPI error body into a readable message.
+ * `detail` can be a plain string or a Pydantic 422 array of
+ * { loc, msg, type } objects — never show the user "[object Object]".
+ */
+export function parseApiError(body: unknown, fallback: string): string {
+  const detail = (body as { detail?: unknown })?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => {
+        if (typeof d === "string") return d;
+        const item = d as { msg?: string; loc?: unknown[] };
+        const field = Array.isArray(item.loc) ? String(item.loc[item.loc.length - 1]) : "";
+        return item.msg ? (field ? `${field}: ${item.msg}` : item.msg) : null;
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join("; ");
+  }
+  return fallback;
+}
+
+async function errorFromResponse(res: Response, fallback: string): Promise<Error> {
+  const body = await res.json().catch(() => ({}));
+  return new Error(parseApiError(body, fallback));
+}
+
+/**
+ * Authenticated fetch wrapper. On 401 the session is over: clear local
+ * auth state and send the user to the login page instead of letting every
+ * widget fail with a generic "Failed to fetch…" error.
+ */
+async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...getAuthHeaders() },
+  });
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearAuth();
+    window.location.href = "/login?expired=1";
+    throw new Error("Session expired — redirecting to login");
+  }
+  return res;
+}
 
 // ─────────────────────────────────────────────
 // Auth
@@ -30,10 +79,7 @@ export async function apiLogin(email: string, password: string): Promise<AuthRes
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Login failed");
-  }
+  if (!res.ok) throw await errorFromResponse(res, "Login failed");
   return res.json();
 }
 
@@ -48,10 +94,7 @@ export async function apiSignup(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, org_name: orgName, full_name: fullName }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Signup failed");
-  }
+  if (!res.ok) throw await errorFromResponse(res, "Signup failed");
   return res.json();
 }
 
@@ -87,10 +130,8 @@ export async function fetchAlerts(params?: {
   if (params?.source) qs.set("source", params.source);
   if (params?.service_name) qs.set("service_name", params.service_name);
 
-  const res = await fetch(`${API_BASE}/api/v1/alerts?${qs}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error("Failed to fetch alerts");
+  const res = await authedFetch(`/api/v1/alerts?${qs}`);
+  if (!res.ok) throw await errorFromResponse(res, "Failed to fetch alerts");
   return res.json();
 }
 
@@ -108,18 +149,14 @@ export async function fetchIncidents(params?: {
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.status) qs.set("status", params.status);
 
-  const res = await fetch(`${API_BASE}/api/v1/incidents?${qs}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error("Failed to fetch incidents");
+  const res = await authedFetch(`/api/v1/incidents?${qs}`);
+  if (!res.ok) throw await errorFromResponse(res, "Failed to fetch incidents");
   return res.json();
 }
 
 export async function fetchIncident(id: number): Promise<Incident> {
-  const res = await fetch(`${API_BASE}/api/v1/incidents/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`Failed to fetch incident ${id}`);
+  const res = await authedFetch(`/api/v1/incidents/${id}`);
+  if (!res.ok) throw await errorFromResponse(res, `Failed to fetch incident ${id}`);
   return res.json();
 }
 
@@ -133,28 +170,24 @@ export async function patchIncident(
     summary: string;
   }>
 ): Promise<Incident> {
-  const res = await fetch(`${API_BASE}/api/v1/incidents/${id}`, {
+  const res = await authedFetch(`/api/v1/incidents/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Failed to update incident ${id}`);
+  if (!res.ok) throw await errorFromResponse(res, `Failed to update incident ${id}`);
   return res.json();
 }
 
 export async function fetchAlert(id: number): Promise<Alert> {
-  const res = await fetch(`${API_BASE}/api/v1/alerts/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`Failed to fetch alert ${id}`);
+  const res = await authedFetch(`/api/v1/alerts/${id}`);
+  if (!res.ok) throw await errorFromResponse(res, `Failed to fetch alert ${id}`);
   return res.json();
 }
 
 export async function fetchIncidentGraph(id: number): Promise<ServiceGraphResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/incidents/${id}/graph`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`Failed to fetch graph for incident ${id}`);
+  const res = await authedFetch(`/api/v1/incidents/${id}/graph`);
+  if (!res.ok) throw await errorFromResponse(res, `Failed to fetch graph for incident ${id}`);
   return res.json();
 }
 
@@ -163,11 +196,8 @@ export async function fetchIncidentGraph(id: number): Promise<ServiceGraphRespon
 // ─────────────────────────────────────────────
 
 export async function analyzeIncident(id: number): Promise<AnalyzeResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/incidents/${id}/analyze`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`Analysis failed for incident ${id}`);
+  const res = await authedFetch(`/api/v1/incidents/${id}/analyze`, { method: "POST" });
+  if (!res.ok) throw await errorFromResponse(res, `Analysis failed for incident ${id}`);
   return res.json();
 }
 
@@ -176,20 +206,18 @@ export async function analyzeIncident(id: number): Promise<AnalyzeResponse> {
 // ─────────────────────────────────────────────
 
 export async function fetchIntegrations(): Promise<Integration[]> {
-  const res = await fetch(`${API_BASE}/api/v1/integrations`, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error("Failed to fetch integrations");
+  const res = await authedFetch(`/api/v1/integrations`);
+  if (!res.ok) throw await errorFromResponse(res, "Failed to fetch integrations");
   return res.json();
 }
 
 export async function createIntegration(provider: string, name?: string): Promise<Integration> {
-  const res = await fetch(`${API_BASE}/api/v1/integrations`, {
+  const res = await authedFetch(`/api/v1/integrations`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider, name }),
   });
-  if (!res.ok) throw new Error("Failed to create integration");
+  if (!res.ok) throw await errorFromResponse(res, "Failed to create integration");
   return res.json();
 }
 
@@ -197,24 +225,20 @@ export async function patchIntegration(
   id: number,
   payload: { status?: string; name?: string; config?: Record<string, unknown> }
 ): Promise<Integration> {
-  const res = await fetch(`${API_BASE}/api/v1/integrations/${id}`, {
+  const res = await authedFetch(`/api/v1/integrations/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Failed to update integration");
+  if (!res.ok) throw await errorFromResponse(res, "Failed to update integration");
   return res.json();
 }
 
 export async function sendTestAlert(id: number): Promise<TestAlertResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/integrations/${id}/test-alert`, {
+  const res = await authedFetch(`/api/v1/integrations/${id}/test-alert`, {
     method: "POST",
-    headers: getAuthHeaders(),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Test alert failed");
-  }
+  if (!res.ok) throw await errorFromResponse(res, "Test alert failed");
   return res.json();
 }
 
@@ -223,11 +247,11 @@ export async function sendTestAlert(id: number): Promise<TestAlertResponse> {
 // ─────────────────────────────────────────────
 
 export async function triggerDemoScenario(scenario: string) {
-  const res = await fetch(`${API_BASE}/api/v1/alerts/demo-generate`, {
+  const res = await authedFetch(`/api/v1/alerts/demo-generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario }),
   });
-  if (!res.ok) throw new Error("Demo generation failed");
+  if (!res.ok) throw await errorFromResponse(res, "Demo generation failed");
   return res.json();
 }

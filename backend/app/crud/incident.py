@@ -23,10 +23,14 @@ async def create_incident(
 
 
 async def get_incident(db: AsyncSession, incident_id: int) -> Incident | None:
+    # populate_existing: callers re-fetch after adding events in the same
+    # session; without it the identity map returns the stale, already-loaded
+    # events collection and new events are missing from API responses.
     result = await db.execute(
         select(Incident)
         .options(selectinload(Incident.events))
         .where(Incident.id == incident_id)
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 

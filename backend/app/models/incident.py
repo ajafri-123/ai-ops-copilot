@@ -6,12 +6,17 @@ IncidentEvent is the audit trail of everything that happens during the incident 
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text  # noqa: F401
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text  # noqa: F401
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+# Postgres-native types with SQLite fallbacks so the test suite
+# (sqlite+aiosqlite) can create the schema.
+JSONBType = JSONB().with_variant(JSON(), "sqlite")
+StringArrayType = ARRAY(String).with_variant(JSON(), "sqlite")
 
 
 class IncidentSeverity(str, enum.Enum):
@@ -62,9 +67,15 @@ class Incident(Base):
         index=True,
     )
 
+    # Environment this incident belongs to (from its triggering alert).
+    # Used as a hard correlation guard: alerts never correlate across environments.
+    environment: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+
     # List of service names involved (stored as Postgres ARRAY for easy querying)
     affected_services: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String), nullable=True
+        StringArrayType, nullable=True
     )
 
     # Human-readable one-paragraph incident summary
@@ -74,7 +85,7 @@ class Incident(Base):
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # AI-generated remediation steps stored as JSON array of strings
-    remediation_steps: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    remediation_steps: Mapped[list | None] = mapped_column(JSONBType, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True

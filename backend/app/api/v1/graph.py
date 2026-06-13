@@ -68,13 +68,15 @@ async def get_incident_graph(
     if not affected:
         return ServiceGraphResponse(nodes=[], edges=[])
 
-    # Fetch all dependency rows where either end touches an affected service
+    # Fetch this org's dependency rows where either end touches an affected
+    # service — topology must never leak across tenants.
     result = await db.execute(
         select(ServiceDependency).where(
+            ServiceDependency.organization_id == ctx.org_id,
             or_(
                 ServiceDependency.service_name.in_(list(affected)),
                 ServiceDependency.depends_on.in_(list(affected)),
-            )
+            ),
         )
     )
     deps = result.scalars().all()

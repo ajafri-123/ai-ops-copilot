@@ -64,6 +64,7 @@ async def _seed_incident(db: AsyncSession, title: str = "Test") -> int:
             status="open",
             affected_services=["orders-service"],
         ),
+        org_id=1,  # must match the test client's org for ownership checks
     )
     return inc.id
 
@@ -83,7 +84,9 @@ async def _run_process_alert(alert_id: int, db: AsyncSession) -> dict:
     if alert is None:
         return {"status": "skipped", "reason": "alert not found", "alert_id": alert_id}
 
-    await ws_manager.emit_alert_created(AlertRead.model_validate(alert).model_dump())
+    await ws_manager.emit_alert_created(
+        alert.organization_id, AlertRead.model_validate(alert).model_dump()
+    )
     result = await correlation_engine.correlate(db, alert)
 
     return {
@@ -240,9 +243,9 @@ async def test_analyze_async_mode_returns_202(client: AsyncClient, db_session: A
         )
 
     assert response.status_code == 202
-    detail = response.json()["detail"]
-    assert detail["incident_id"] == incident_id
-    assert "task_id" in detail
+    data = response.json()
+    assert data["incident_id"] == incident_id
+    assert "task_id" in data
 
 
 @pytest.mark.asyncio

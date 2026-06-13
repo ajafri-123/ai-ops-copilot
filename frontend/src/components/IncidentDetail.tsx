@@ -19,7 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { analyzeIncident } from "@/lib/api";
+import { analyzeIncident, patchIncident } from "@/lib/api";
 import {
   SEVERITY_BADGE,
   SEVERITY_DOT,
@@ -53,12 +53,23 @@ const SIGNIFICANCE_DOT: Record<string, string> = {
   low: "bg-slate-500",
 };
 
+const INCIDENT_STATUSES = [
+  "open",
+  "investigating",
+  "identified",
+  "monitoring",
+  "resolved",
+  "closed",
+] as const;
+
 export function IncidentDetail({ incident, onClose }: Props) {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<RCAResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "ai" | "timeline">("overview");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const visibleEvents = showAllEvents
     ? incident.events
@@ -84,6 +95,20 @@ export function IncidentDetail({ incident, onClose }: Props) {
     }
   };
 
+  const changeStatus = async (next: string) => {
+    if (next === incident.status) return;
+    setSavingStatus(true);
+    setStatusError(null);
+    try {
+      // The resulting incident.updated WS event refreshes dashboard state.
+      await patchIncident(incident.id, { status: next });
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : "Failed to update status");
+    } finally {
+      setSavingStatus(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-cyan-500/[0.12] bg-[#06101f] shadow-glow-cyan">
       {/* ── Header ── */}
@@ -92,19 +117,42 @@ export function IncidentDetail({ incident, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-slate-500">#{incident.id}</span>
             <SeverityBadge severity={incident.severity} pulse />
-            <span
+            {/* Status control — acknowledge / resolve / close from the UI */}
+            <select
+              value={incident.status}
+              onChange={(e) => changeStatus(e.target.value)}
+              disabled={savingStatus}
+              aria-label="Incident status"
               className={clsx(
-                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+                "cursor-pointer rounded-full border bg-transparent px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide outline-none transition focus:ring-1 focus:ring-cyan-500/40",
+                savingStatus && "cursor-wait opacity-60",
                 STATUS_BADGE[incident.status] ??
                   "bg-slate-500/15 text-slate-400 border-slate-500/30",
               )}
             >
-              {incident.status}
-            </span>
+              {INCIDENT_STATUSES.map((s) => (
+                <option key={s} value={s} className="bg-[#06101f] text-slate-300">
+                  {s}
+                </option>
+              ))}
+            </select>
+            {incident.status !== "resolved" && incident.status !== "closed" && (
+              <button
+                onClick={() => changeStatus("resolved")}
+                disabled={savingStatus}
+                className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 transition hover:bg-green-500/20 disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Resolve
+              </button>
+            )}
           </div>
           <h2 className="mt-2 text-sm font-semibold leading-snug text-white">
             {incident.title}
           </h2>
+          {statusError && (
+            <p className="mt-1.5 text-xs text-red-400" role="alert">{statusError}</p>
+          )}
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-2">
@@ -390,8 +438,23 @@ function ConfidenceCard({ result }: { result: RCAResult }) {
     SEVERITY_BADGE[result.risk_level as keyof typeof SEVERITY_BADGE] ??
     "bg-slate-500/15 text-slate-400 border-slate-500/30";
 
+  const isMock = result.provider === "mock";
+
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+      {isMock && (
+        <div
+          role="note"
+          className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-3 py-2 text-[11px] leading-relaxed text-amber-300"
+        >
+          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <span>
+            <strong>Simulated analysis.</strong> No <code>OPENAI_API_KEY</code> is configured, so this
+            root cause and remediation are produced by a pattern-matching mock — not a real LLM. Do not
+            act on these steps in a live environment.
+          </span>
+        </div>
+      )}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5 text-indigo-400" />

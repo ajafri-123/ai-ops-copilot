@@ -39,6 +39,11 @@ export default function IncidentDetailPage({
   const [drawerAlertId, setDrawerAlertId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
+    if (!Number.isInteger(incidentId) || incidentId <= 0) {
+      setError("Invalid incident ID");
+      setLoading(false);
+      return;
+    }
     try {
       const [inc, g] = await Promise.all([
         fetchIncident(incidentId),

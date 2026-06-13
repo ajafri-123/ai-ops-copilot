@@ -3,7 +3,7 @@
 import { Bot, Shield, Zap, Activity } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiLogin } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
@@ -12,7 +12,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("expired")) {
+      setNotice("Your session expired. Please sign in again.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -124,6 +131,12 @@ export default function LoginPage() {
               <div className="absolute bottom-0 right-0 h-full w-px bg-gradient-to-t from-cyan-400/30 to-transparent" />
               <div className="absolute bottom-0 right-0 h-px w-full bg-gradient-to-l from-cyan-400/30 to-transparent" />
             </div>
+
+            {notice && (
+              <div className="mb-4 rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-3.5 py-2.5 text-xs text-amber-300" role="status">
+                {notice}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">

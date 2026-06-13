@@ -5,12 +5,13 @@ Auth endpoints
   GET  /api/v1/auth/me      – return current user info
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import AuthContext, get_auth
+from app.core.ratelimit import AUTH_LOGIN_LIMIT, AUTH_SIGNUP_LIMIT, limiter
 from app.core.security import create_access_token, verify_password
 from app.crud.user import create_org_and_user, get_user_by_email, get_user_primary_membership
 from app.models.organization import Organization
@@ -20,7 +21,10 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit(AUTH_SIGNUP_LIMIT)
+async def signup(
+    request: Request, payload: SignupRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     if await get_user_by_email(db, payload.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -43,7 +47,10 @@ async def signup(payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> 
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit(AUTH_LOGIN_LIMIT)
+async def login(
+    request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     user = await get_user_by_email(db, payload.email)
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

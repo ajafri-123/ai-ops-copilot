@@ -3,12 +3,19 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
+# Pool sizing only applies to real client/server databases; SQLite
+# (used by the test suite and lightweight local runs) rejects those args.
+_pool_kwargs = (
+    {}
+    if settings.DATABASE_URL.startswith("sqlite")
+    else {"pool_size": 10, "max_overflow": 20}
+)
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     pool_pre_ping=True,       # detect stale connections
-    pool_size=10,
-    max_overflow=20,
+    **_pool_kwargs,
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
